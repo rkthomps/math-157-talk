@@ -23,12 +23,12 @@ inductive BigStep : State → Stmt → State → Prop where
       BigStep st (.ifThenElse b s₁ s₂) st'
 
   | ifFalse (b : BExp) (s₁ s₂ : Stmt) (st st' : State) :
-      beval b st →
+      ¬ beval b st →
       BigStep st s₂ st' →
       BigStep st (.ifThenElse b s₁ s₂) st'
 
   | whileFalse (b : BExp) (body : Stmt) (st : State) :
-      beval b st →
+      ¬ beval b st →
       BigStep st (.while b body) st
 
   | whileTrue (b : BExp) (body : Stmt) (st st' st'' : State) :

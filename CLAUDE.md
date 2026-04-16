@@ -10,6 +10,10 @@ This is a Lean 4 project containing lecture examples for a Math 157 talk on Lean
 
 The talk covers: verified foundations, proof automation, and the `grind` tactic. See `plan.md` for the lecture outline.
 
+## Workflow
+
+After every change to a `.lean` file, run `lake build` and fix any errors before proceeding.
+
 ## Common Commands
 
 ```bash

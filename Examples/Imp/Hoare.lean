@@ -49,6 +49,31 @@ inductive FH : Assertion → Stmt → Assertion → Prop where
 
 
 
+abbrev Valid (P : Assertion) (s : Stmt) (Q : Assertion) : Prop :=
+    ∀ st st', P st → (BigStep st s st') → Q st'
+
+
+theorem fh_sound (P : Assertion) (s : Stmt) (Q : Assertion) :
+  FH P s Q → Valid P s Q := by
+  intros H
+  induction H
+  case «skip» => simp [Valid]; intros _ _ p b; cases b; assumption
+  case assign => simp [Valid]; intros _ _ p b; cases b; assumption
+  case seq =>
+    simp [Valid]; intros _ _ p b; cases b
+    grind
+  case ifThenElse =>
+    simp [Valid]; intros _ _ p b; cases b <;> grind
+  case «while» =>
+    simp [Valid]; intros _ _ p b; cases b
+    case whileFalse => grind
+    case whileTrue => sorry
+  case consL =>
+    simp [Valid]; intros _ _ p b; sorry
+  case consR =>
+    simp [Valid]; intros _ _ p b; sorry
+
+
 /-- Annotated commands: `Stmt` extended with a loop invariant on `while`. -/
 inductive AStmt where
   | skip
@@ -74,5 +99,48 @@ def pre (q : Assertion) : AStmt → Assertion
   | .seq s₁ s₂        => pre (pre q s₂) s₁
   | .ifThenElse b s₁ s₂ => fun st => if beval b st then pre q s₁ st else pre q s₂ st
   | .while inv _ _     => inv
+
+/-- Verification conditions for an annotated statement with postcondition `q`.
+    `vc s q` holds iff the annotation is self-consistent and all side conditions
+    needed to close the Hoare triple `{pre q s} s {q}` are discharged. -/
+@[simp]
+def vc : AStmt → Assertion → Prop
+  | .skip,               _ => True
+  | .assign _ _,         _ => True
+  | .seq s₁ s₂,         q => vc s₁ (pre q s₂) ∧ vc s₂ q
+  | .ifThenElse _ s₁ s₂, q => vc s₁ q ∧ vc s₂ q
+  | .while inv b body,   q => (∀ st, inv st → beval b st  → pre inv body st) ∧
+                               (∀ st, inv st → ¬beval b st → q st) ∧
+                               vc body inv
+
+
+theorem vc_pre (s : AStmt) (q : Assertion) :
+  vc s q → FH (pre q s) (s.toStmt) q := by
+  sorry
+
+
+theorem vc_sound (s : AStmt) (q : Assertion) :
+  vc s q → Valid (pre q s) (s.toStmt) q := by
+  intros h
+  have : FH (pre q s) (s.toStmt) q := by apply vc_pre; assumption
+  sorry
+
+
+def vc' (p : Assertion) (s : AStmt) (q : Assertion) : Prop :=
+  vc s q ∧ p.entails (pre q s)
+
+
+theorem vc'_sound (p : Assertion) (s : AStmt) (q : Assertion) :
+  vc' p s q → Valid p (s.toStmt) q := by
+  intros h
+  simp [vc'] at h
+  have : Valid (pre q s) (s.toStmt) q := by apply vc_sound; simp_all
+  simp [Valid] at *
+  intros st st' hp hs
+  have hp' : (pre q s) st := by simp [Assertion.entails] at h; simp_all
+  apply this st st'; assumption
+  assumption
+
+
 
 end Imp
