@@ -178,8 +178,53 @@ theorem count_down_to_end_state : Valid (fun _ => True) count_down_inv.toStmt co
   · omega
 
 
+def inv_n_eq (k : Int) : Assertion := fun st => st "n" = k
+
+def count_up_n_inv (k : Int) := [aimp|
+  sum := 0;
+  i := 0;
+  while (i <= n) inv(inv_n_eq k) {
+    sum := sum + i;
+    i := i + 1
+  }
+]
+
+def count_down_n_inv (k : Int) := [aimp|
+  sum := 0;
+  i := n;
+  while (0 <= i) inv(inv_n_eq k) {
+    sum := sum + i;
+    i := i - 1
+  }
+]
+
+theorem count_up_preserves_n (k : Int) :
+    Valid (fun st => st "n" = k) count_up_inv.toStmt (fun st' => st' "n" = k) := by
+  show Valid (fun st => st "n" = k) (count_up_n_inv k).toStmt (inv_n_eq k)
+  apply vc'_sound
+  simp [vc', count_up_n_inv, vc, inv_n_eq, Assertion.subst, aeval, State.update,
+        beval, pre, Assertion.entails]
+  constructor <;> intro st h _ <;> exact h
+
+theorem count_down_preserves_n (k : Int) :
+    Valid (fun st => st "n" = k) count_down_inv.toStmt (fun st' => st' "n" = k) := by
+  show Valid (fun st => st "n" = k) (count_down_n_inv k).toStmt (inv_n_eq k)
+  apply vc'_sound
+  simp [vc', count_down_n_inv, vc, inv_n_eq, Assertion.subst, aeval, State.update,
+        beval, pre, Assertion.entails]
+  constructor <;> intro st h _ <;> exact h
+
 theorem count_up_down_equiv : EquivOn ["sum"] count_up_inv.toStmt count_down_inv.toStmt := by
-  sorry
+  simp [EquivOn, State.equivOn]
+  intros st st₁' st₂' H1 H2
+  have ce1 := count_up_to_end_state st st₁' trivial H1
+  have ce2 := count_down_to_end_state st st₂' trivial H2
+  have hn1 : st₁' "n" = st "n" := count_up_preserves_n (st "n") st st₁' rfl H1
+  have hn2 : st₂' "n" = st "n" := count_down_preserves_n (st "n") st st₂' rfl H2
+  simp only [count_end_state] at ce1 ce2
+  rw [hn1] at ce1
+  rw [hn2] at ce2
+  split at ce1 <;> simp_all <;> omega
 
 
 
