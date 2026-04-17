@@ -153,25 +153,6 @@ theorem foo_false (b : BExp) (p1 p2 : Assertion) :
   Assertion.entails (fun st => (if beval b st then p1 st else p2 st) ∧ ¬ beval b st) p2 := by
   simp [Assertion.entails]; intros st h1 h2; simp_all
 
---   | ifThenElse (P Q : Assertion) (b : BExp) (s₁ s₂ : Stmt) :
---       FH (fun st => P st ∧ beval b st) s₁ Q →
---       FH (fun st => P st ∧ ¬beval b st) s₂ Q →
---       FH P (.ifThenElse b s₁ s₂) Q
-
---   | while (P : Assertion) (b : BExp) (body : Stmt) :
---       FH (fun st => P st ∧ beval b st) body P →
---       FH P (.while b body) (fun st => P st ∧ ¬beval b st)
-
---   | consL (P' P : Assertion) (Q : Assertion) (s : Stmt) :
---       FH P s Q →
---       P'.entails P →
---       FH P' s Q
-
---   | consR (P Q Q' : Assertion) (s : Stmt) :
---       FH P s Q →
---       Q.entails Q' →
---       FH P s Q'
-
 
 theorem vc_pre (s : AStmt) (q : Assertion) :
   vc s q → FH (pre q s) (s.toStmt) q := by
@@ -197,15 +178,19 @@ theorem vc_pre (s : AStmt) (q : Assertion) :
     have else_cons := FH.consL _ _ q s₂.toStmt this2 this_else
     exact FH.ifThenElse _ _ _ _ _ this_cons else_cons
   case case5 inv b body q ih =>
-    intros h
-    simp [vc] at *
-    obtain ⟨h1, h2, h3⟩ := h
-    have := ih h3
-    have enter : Assertion.entails (fun st => inv st ∧ beval b st) (pre q body) := by
-      sorry
-    have exit : Assertion.entails (fun st => inv st ∧ ¬beval b st) q := by
-      sorry
-    sorry
+    simp [pre, vc] at *
+    intro hbody_pre hq_exit hvc_body
+    have body_fh : FH (pre inv body) body.toStmt inv := ih hvc_body
+    apply FH.consR _ (fun st => inv st ∧ ¬beval b st)
+    · apply FH.while
+      apply FH.consL _ (pre inv body) _ _ body_fh
+      intro st hinv
+      exact hbody_pre st hinv.1 hinv.2
+    · intro st hinv
+      apply hq_exit st hinv.1
+      cases h : beval b st
+      · rfl
+      · exact absurd h hinv.2
 
 
 
