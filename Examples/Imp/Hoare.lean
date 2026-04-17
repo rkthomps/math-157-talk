@@ -146,14 +146,31 @@ def vc : AStmt → Assertion → Prop
                                vc body inv
 
 theorem foo_true (b : BExp) (p1 p2 : Assertion) :
-  Assertion.entails (fun st => (if beval b s then p1 st else p2 st) ∧ beval b st) p1 := by
-  simp [Assertion.entails]; intros st h1 h2
-  sorry
+  Assertion.entails (fun st => (if beval b st then p1 st else p2 st) ∧ beval b st) p1 := by
+  simp [Assertion.entails]; intros st h1 h2; simp_all
 
 theorem foo_false (b : BExp) (p1 p2 : Assertion) :
-  Assertion.entails (fun st => (if beval b s then p1 st else p2 st) ∧ ¬ beval b st) p2 := by
-  simp [Assertion.entails]; intros st h1 h2
-  sorry
+  Assertion.entails (fun st => (if beval b st then p1 st else p2 st) ∧ ¬ beval b st) p2 := by
+  simp [Assertion.entails]; intros st h1 h2; simp_all
+
+--   | ifThenElse (P Q : Assertion) (b : BExp) (s₁ s₂ : Stmt) :
+--       FH (fun st => P st ∧ beval b st) s₁ Q →
+--       FH (fun st => P st ∧ ¬beval b st) s₂ Q →
+--       FH P (.ifThenElse b s₁ s₂) Q
+
+--   | while (P : Assertion) (b : BExp) (body : Stmt) :
+--       FH (fun st => P st ∧ beval b st) body P →
+--       FH P (.while b body) (fun st => P st ∧ ¬beval b st)
+
+--   | consL (P' P : Assertion) (Q : Assertion) (s : Stmt) :
+--       FH P s Q →
+--       P'.entails P →
+--       FH P' s Q
+
+--   | consR (P Q Q' : Assertion) (s : Stmt) :
+--       FH P s Q →
+--       Q.entails Q' →
+--       FH P s Q'
 
 
 theorem vc_pre (s : AStmt) (q : Assertion) :
@@ -174,10 +191,11 @@ theorem vc_pre (s : AStmt) (q : Assertion) :
     intros hpre hq
     have this1 := ih₁ hpre
     have this2 := ih₂ hq
-    -- exact FH.ifThenElse _ _ b s₁.toStmt s₂.toStmt this1 this2
-    -- have that
-    sorry
-
+    have this_then := foo_true b (pre q s₁) (pre q s₂)
+    have this_else := foo_false b (pre q s₁) (pre q s₂)
+    have this_cons := FH.consL _ _ q s₁.toStmt this1 this_then
+    have else_cons := FH.consL _ _ q s₂.toStmt this2 this_else
+    exact FH.ifThenElse _ _ _ _ _ this_cons else_cons
   case case5 inv b body q ih =>
     intros h
     simp [vc] at *
@@ -187,6 +205,7 @@ theorem vc_pre (s : AStmt) (q : Assertion) :
       sorry
     have exit : Assertion.entails (fun st => inv st ∧ ¬beval b st) q := by
       sorry
+    sorry
 
 
 
