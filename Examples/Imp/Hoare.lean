@@ -8,6 +8,7 @@ namespace Imp
 def Assertion := State → Prop
 
 /-- Assertion entailment. -/
+@[simp, grind]
 def Assertion.entails (P Q : Assertion) : Prop := ∀ st, P st → Q st
 
 /-- Substitution: `P [x := a]` is the assertion that holds when P holds
@@ -49,6 +50,7 @@ inductive FH : Assertion → Stmt → Assertion → Prop where
 
 
 
+@[simp, grind]
 def Valid (P : Assertion) (s : Stmt) (Q : Assertion) : Prop :=
     ∀ st st', P st → (BigStep st s st') → Q st'
 

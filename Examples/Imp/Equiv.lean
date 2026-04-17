@@ -92,44 +92,36 @@ def count_down := [imp|
   }
 ]
 
-def inv_up : Assertion := fun st =>
+def inv_up (k : Int) : Assertion := fun st =>
   let n := st "n"
   let i := st "i"
   let sum := st "sum"
   let case1 := 0 = i ∧ n < 0 ∧ sum == 0
   let case2 := 0 ≤ i ∧ i ≤ n + 1 ∧ 0 ≤ n ∧ sum == (i * (i - 1)) / 2
-  case1 ∨ case2
+  n = k ∧ (case1 ∨ case2)
 
 
-
-def count_up_inv := [aimp|
+def count_up_inv (k : Int) := [aimp|
   sum := 0;
   i := 0;
-  while (i <= n) inv(inv_up) {
+  while (i <= n) inv(inv_up k) {
     sum := sum + i;
     i := i + 1
   }
 ]
 
 @[grind =]
-theorem count_up_inv_stmt : count_up_inv.toStmt = count_up := by
+theorem count_up_inv_stmt {k : Int} : (count_up_inv k).toStmt = count_up := by
   simp [count_up, count_up_inv, AStmt.toStmt]
 
-def count_spec (initial : State) : State :=
-  let n := initial "n"
-  if n < 0 then
-    initial.update "sum" 0
-  else
-    initial.update "sum" ((n * (n + 1)) / 2)
 
-
-def count_end_state : Assertion := fun st =>
+def count_end_state (k : Int) : Assertion := fun st =>
   let n := st "n"
   let sum := st "sum"
   if n < 0 then
-    sum == 0
+    sum == 0 ∧ n = k
   else
-    sum == (n * (n + 1)) / 2
+    sum == (n * (n + 1)) / 2 ∧ n = k
 
 
 
@@ -137,105 +129,60 @@ def count_end_state : Assertion := fun st =>
 theorem squish_up (a b : Int): a ≤ b + 1 ∧ b < a → a = b + 1 := by omega
 
 
-theorem count_up_to_end_state : Valid (fun _ => True) count_up_inv.toStmt count_end_state := by
+theorem count_up_to_end_state {k : Int} : Valid (fun st => st "n" = k) (count_up_inv k).toStmt (count_end_state k) := by
   apply vc'_sound
   simp [count_up_inv, count_end_state]
-  grind [Int.mul_comm, inv_up]
+  grind [inv_up, Int.mul_comm]
 
 
-def inv_down: Assertion := fun st =>
+@[grind →]
+theorem count_up_end_state' (st st' : State) :
+  BigStep st count_up st' → count_end_state (st "n") st' := by
+  grind [count_up_to_end_state (k := st "n")]
+
+
+def inv_down (k : Int) : Assertion := fun st =>
   let n := st "n"
   let i := st "i"
   let sum := st "sum"
   let case1 := n < 0 ∧ i = n ∧ sum == 0
   let case2 := 0 ≤ n ∧ -1 ≤ i ∧ i ≤ n ∧ sum == (n * (n + 1)) / 2 - (i * (i + 1)) / 2
-  case1 ∨ case2
+  n = k ∧ (case1 ∨ case2)
 
-def count_down_inv := [aimp|
+def count_down_inv (k : Int) := [aimp|
   sum := 0;
   i := n;
-  while (0 <= i) inv(inv_down) {
+  while (0 <= i) inv(inv_down k) {
     sum := sum + i;
     i := i - 1
   }
 ]
 
 @[grind =]
-theorem count_down_inv_stmt : count_down_inv.toStmt = count_down := by
+theorem count_down_inv_stmt {k : Int} : (count_down_inv k).toStmt = count_down := by
   simp [count_down, count_down_inv, AStmt.toStmt]
 
 @[grind →]
 theorem squish_down (a b : Int) : a < (b + 1) → b ≤ a → a = b := by omega
 
 
-theorem count_down_to_end_state : Valid (fun _ => True) count_down_inv.toStmt count_end_state := by
+theorem count_down_to_end_state {k : Int} : Valid (fun st => st "n" = k) (count_down_inv k).toStmt (count_end_state k):= by
   apply vc'_sound
   simp [count_down_inv, count_end_state]
   grind [inv_down]
 
-
-def inv_n_eq (k : Int) : Assertion := fun st => st "n" = k
-
-def count_up_n_inv (k : Int) := [aimp|
-  sum := 0;
-  i := 0;
-  while (i <= n) inv(inv_n_eq k) {
-    sum := sum + i;
-    i := i + 1
-  }
-]
-
-@[grind =]
-theorem count_up_n_inv_stmt (k : Int) : (count_up_n_inv k).toStmt = count_up := by
-  simp [count_up, count_up_n_inv, AStmt.toStmt]
-
-
-def count_down_n_inv (k : Int) := [aimp|
-  sum := 0;
-  i := n;
-  while (0 <= i) inv(inv_n_eq k) {
-    sum := sum + i;
-    i := i - 1
-  }
-]
-
-@[grind =]
-theorem count_down_n_inv_stmt (k : Int) : (count_down_n_inv k).toStmt = count_down := by
-  simp [count_down, count_down_n_inv, AStmt.toStmt]
-
-theorem count_up_preserves_n_triple (k : Int) :
-  Valid (fun st => st "n" = k) (count_up_n_inv k).toStmt (inv_n_eq k) := by
-  apply vc'_sound
-  simp [count_up_n_inv]
-  grind [inv_n_eq]
-
-
 @[grind →]
-theorem count_up_preserves_n (st st' : State) :
-  BigStep st count_up st' → st "n" = st' "n" := by
-  intros h
-  have h' := count_up_preserves_n_triple (st "n")
-  have h'' := valid_implies_big_step h' h
-  grind [inv_n_eq, count_up_n_inv]
-
-
-
-theorem count_down_preserves_n_triple (k : Int) :
-    Valid (fun st => st "n" = k) (count_down_n_inv k).toStmt (inv_n_eq k) := by
-  apply vc'_sound
-  simp [count_down_n_inv]
-  grind [inv_n_eq]
-
-
-@[grind →]
-theorem count_down_preserves_n (st st' : State) :
-  BigStep st count_down st' → st "n" = st' "n" := by
-  have := count_down_preserves_n_triple (st "n")
-  grind [inv_n_eq, count_down_n_inv]
+theorem count_down_end_state' (st st' : State) :
+  BigStep st count_down st' → count_end_state (st "n") st' := by
+  grind [count_down_to_end_state (k := st "n")]
 
 
 theorem count_up_down_equiv : EquivOn ["sum"] count_up count_down := by
-  grind [count_end_state, count_up_to_end_state, count_down_to_end_state]
+  grind [
+    count_end_state,
+    count_up_end_state',
+    count_down_end_state'
+  ]
 
 
 end Count
