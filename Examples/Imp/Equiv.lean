@@ -86,17 +86,19 @@ def count_down := [imp|
 ]
 
 def inv_up : Assertion := fun st =>
+  let n := st "n"
   let i := st "i"
-  if i == 0 then
-    st "sum" == 0 ∧ i >= 0
-  else
-    (st "sum" == (i * (i - 1)) / 2) ∧ i > 0
+  let sum := st "sum"
+  let case1 := 0 = i ∧ n < 0 ∧ sum == 0
+  let case2 := 0 ≤ i ∧ i ≤ n + 1 ∧ 0 ≤ n ∧ sum == (i * (i - 1)) / 2
+  case1 ∨ case2
+
 
 
 def count_up_inv := [aimp|
   sum := 0;
   i := 0;
-  while (i <= n) inv(inv_up){
+  while (i <= n) inv(inv_up) {
     sum := sum + i;
     i := i + 1
   }
@@ -110,17 +112,62 @@ def count_spec (initial : State) : State :=
     initial.update "sum" ((n * (n + 1)) / 2)
 
 
+def count_end_state : Assertion := fun st =>
+  let n := st "n"
+  let sum := st "sum"
+  if n < 0 then
+    sum == 0
+  else
+    sum == (n * (n + 1)) / 2
+
+
+theorem count_up_to_end_state : Valid (fun _ => True) count_up_inv.toStmt count_end_state := by
+  apply vc'_sound
+  simp [vc', Assertion.entails, count_up_inv, Assertion.subst, aeval, State.update, count_end_state]
+  simp [inv_up, beval, aeval, State.update]
+  constructor
+  · constructor
+    · intros st h1 h2
+      grind
+    · intros s h1 h2
+      cases h1
+      · simp_all
+      · have : s "n" >= 0 := by omega
+        split
+        · omega
+        · have : s "i" = s "n" + 1 := by omega
+          simp_all
+          grind
+  · omega
+
+
+
 theorem count_up_meets_spec (initial : State):
   Valid (fun st => st = initial) count_up_inv.toStmt (fun st => st.equivOn ["sum"] (count_spec initial)) := by
   apply vc'_sound
   simp [vc', Assertion.entails, count_up_inv, Assertion.subst, aeval, State.update, count_spec, State.equivOn, inv_up]
   constructor
-  · intros st vc
-    simp [beval, aeval]
-    intros h
-    split
-    · contradiction
-  · sorry
+  · constructor
+    · intros st h1 h2
+      sorry
+    · intros s h1
+      simp [beval, aeval]
+      intros h2
+      cases h1
+      · simp_all
+      · simp_all
+
+      have : s "i" = s "n" + 1 := by
+        have foo : s "i" <= s "n" + 1 := by simp_all
+        omega
+
+
+  · omega
+
+
+
+
+
 
 
 

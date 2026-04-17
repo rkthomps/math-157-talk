@@ -53,6 +53,25 @@ abbrev Valid (P : Assertion) (s : Stmt) (Q : Assertion) : Prop :=
     ∀ st st', P st → (BigStep st s st') → Q st'
 
 
+
+theorem loop_inv (inv : Assertion) (st st' : State) (b : BExp) (body : Stmt) :
+  Valid (fun st => inv st ∧ beval b st) body (fun st' => inv st') ->
+  BigStep st (.while b body) st' →
+  inv st →
+  inv st' := by
+  intros h1 h2 h3
+  generalize foo : (Stmt.while b body) = s at h2
+  induction h2 <;> grind
+
+
+theorem loop_exit (st st' : State) (b : BExp) (body : Stmt) :
+  BigStep st (.while b body) st' →
+  ¬ beval b st' := by
+  intros h
+  generalize foo : (Stmt.while b body) = s at h
+  induction h <;> grind
+
+
 theorem fh_sound (P : Assertion) (s : Stmt) (Q : Assertion) :
   FH P s Q → Valid P s Q := by
   intros H
@@ -64,14 +83,27 @@ theorem fh_sound (P : Assertion) (s : Stmt) (Q : Assertion) :
     grind
   case ifThenElse =>
     simp [Valid]; intros _ _ p b; cases b <;> grind
-  case «while» =>
+  case «while» wp wb wbo wfh ih =>
     simp [Valid]; intros _ _ p b; cases b
     case whileFalse => grind
-    case whileTrue => sorry
-  case consL =>
-    simp [Valid]; intros _ _ p b; sorry
-  case consR =>
-    simp [Valid]; intros _ _ p b; sorry
+    case whileTrue st st'' st' hbv hbs1 hbs2 =>
+    --   have : BigStep
+      constructor
+      · have huge_step : BigStep st (.while wb wbo) st'' := by
+          exact BigStep.whileTrue wb wbo st st' st'' hbv hbs1 hbs2
+        have := loop_inv wp st st'' wb wbo ih huge_step p
+        assumption
+      · grind [loop_exit]
+
+
+  case consL cp cp' cq cq' cs hfh hq =>
+    simp [Valid] at *; intros st st' hcp hb
+    have : cp' st := by simp [Assertion.entails] at hfh; exact hfh st hcp
+    exact hq st st' this hb
+  case consR cp cq cq' cs hfh hq hv =>
+    simp [Valid] at *; intros st st' hcp hb
+    have : cq st' := by exact hv st st' hcp hb
+    simp [Assertion.entails] at hq; exact hq st' this
 
 
 /-- Annotated commands: `Stmt` extended with a loop invariant on `while`. -/
@@ -113,17 +145,57 @@ def vc : AStmt → Assertion → Prop
                                (∀ st, inv st → ¬beval b st → q st) ∧
                                vc body inv
 
+theorem foo_true (b : BExp) (p1 p2 : Assertion) :
+  Assertion.entails (fun st => (if beval b s then p1 st else p2 st) ∧ beval b st) p1 := by
+  simp [Assertion.entails]; intros st h1 h2
+  sorry
+
+theorem foo_false (b : BExp) (p1 p2 : Assertion) :
+  Assertion.entails (fun st => (if beval b s then p1 st else p2 st) ∧ ¬ beval b st) p2 := by
+  simp [Assertion.entails]; intros st h1 h2
+  sorry
+
 
 theorem vc_pre (s : AStmt) (q : Assertion) :
   vc s q → FH (pre q s) (s.toStmt) q := by
-  sorry
+  induction s, q using vc.induct
+  case case1 => simp [pre]; exact FH.skip _
+  case case2 x ae p =>
+    intros h; simp [pre];
+    exact FH.assign _ x ae
+  case case3 s₁ s₂ q ih₁ ih₂ =>
+    simp [pre, vc] at *
+    intros hpre hq
+    have this1 := ih₁ hpre
+    have this2 := ih₂ hq
+    exact FH.seq _ _ _ s₁.toStmt s₂.toStmt this1 this2
+  case case4 b s₁ s₂ q ih₁ ih₂ =>
+    simp [pre, vc] at *
+    intros hpre hq
+    have this1 := ih₁ hpre
+    have this2 := ih₂ hq
+    -- exact FH.ifThenElse _ _ b s₁.toStmt s₂.toStmt this1 this2
+    -- have that
+    sorry
+
+  case case5 inv b body q ih =>
+    intros h
+    simp [vc] at *
+    obtain ⟨h1, h2, h3⟩ := h
+    have := ih h3
+    have enter : Assertion.entails (fun st => inv st ∧ beval b st) (pre q body) := by
+      sorry
+    have exit : Assertion.entails (fun st => inv st ∧ ¬beval b st) q := by
+      sorry
+
+
 
 
 theorem vc_sound (s : AStmt) (q : Assertion) :
   vc s q → Valid (pre q s) (s.toStmt) q := by
   intros h
   have : FH (pre q s) (s.toStmt) q := by apply vc_pre; assumption
-  sorry
+  exact fh_sound (pre q s) (s.toStmt) q this
 
 
 def vc' (p : Assertion) (s : AStmt) (q : Assertion) : Prop :=
