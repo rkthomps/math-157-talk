@@ -49,9 +49,8 @@ inductive FH : Assertion → Stmt → Assertion → Prop where
 
 
 
-abbrev Valid (P : Assertion) (s : Stmt) (Q : Assertion) : Prop :=
+def Valid (P : Assertion) (s : Stmt) (Q : Assertion) : Prop :=
     ∀ st st', P st → (BigStep st s st') → Q st'
-
 
 
 theorem loop_inv (inv : Assertion) (st st' : State) (b : BExp) (body : Stmt) :
@@ -61,7 +60,7 @@ theorem loop_inv (inv : Assertion) (st st' : State) (b : BExp) (body : Stmt) :
   inv st' := by
   intros h1 h2 h3
   generalize foo : (Stmt.while b body) = s at h2
-  induction h2 <;> grind
+  induction h2 <;> grind [Valid]
 
 
 theorem loop_exit (st st' : State) (b : BExp) (body : Stmt) :
@@ -76,34 +75,27 @@ theorem fh_sound (P : Assertion) (s : Stmt) (Q : Assertion) :
   FH P s Q → Valid P s Q := by
   intros H
   induction H
-  case «skip» => simp [Valid]; intros _ _ p b; cases b; assumption
+  case «skip» => simp [Valid]; intros _ _ p b; cases b; grind
   case assign => simp [Valid]; intros _ _ p b; cases b; assumption
   case seq =>
     simp [Valid]; intros _ _ p b; cases b
-    grind
+    grind [Valid]
   case ifThenElse =>
-    simp [Valid]; intros _ _ p b; cases b <;> grind
+    simp [Valid]; intros _ _ p b; cases b <;> grind [Valid]
   case «while» wp wb wbo wfh ih =>
     simp [Valid]; intros _ _ p b; cases b
     case whileFalse => grind
     case whileTrue st st'' st' hbv hbs1 hbs2 =>
-    --   have : BigStep
-      constructor
-      · have huge_step : BigStep st (.while wb wbo) st'' := by
-          exact BigStep.whileTrue wb wbo st st' st'' hbv hbs1 hbs2
-        have := loop_inv wp st st'' wb wbo ih huge_step p
-        assumption
-      · grind [loop_exit]
+      have big := BigStep.whileTrue wb wbo st st' st'' hbv hbs1 hbs2
+      exact ⟨loop_inv wp st st'' wb wbo ih big p, by grind [loop_exit]⟩
 
 
   case consL cp cp' cq cq' cs hfh hq =>
-    simp [Valid] at *; intros st st' hcp hb
-    have : cp' st := by simp [Assertion.entails] at hfh; exact hfh st hcp
-    exact hq st st' this hb
+    simp [Valid, Assertion.entails] at *
+    intros st st' hcp hb; exact hq st st' (hfh st hcp) hb
   case consR cp cq cq' cs hfh hq hv =>
-    simp [Valid] at *; intros st st' hcp hb
-    have : cq st' := by exact hv st st' hcp hb
-    simp [Assertion.entails] at hq; exact hq st' this
+    simp [Valid, Assertion.entails] at *
+    intros st st' hcp hb; exact hq st' (hv st st' hcp hb)
 
 
 /-- Annotated commands: `Stmt` extended with a loop invariant on `while`. -/
@@ -164,19 +156,13 @@ theorem vc_pre (s : AStmt) (q : Assertion) :
   case case3 s₁ s₂ q ih₁ ih₂ =>
     simp [pre, vc] at *
     intros hpre hq
-    have this1 := ih₁ hpre
-    have this2 := ih₂ hq
-    exact FH.seq _ _ _ s₁.toStmt s₂.toStmt this1 this2
+    exact FH.seq _ _ _ s₁.toStmt s₂.toStmt (ih₁ hpre) (ih₂ hq)
   case case4 b s₁ s₂ q ih₁ ih₂ =>
     simp [pre, vc] at *
     intros hpre hq
-    have this1 := ih₁ hpre
-    have this2 := ih₂ hq
-    have this_then := foo_true b (pre q s₁) (pre q s₂)
-    have this_else := foo_false b (pre q s₁) (pre q s₂)
-    have this_cons := FH.consL _ _ q s₁.toStmt this1 this_then
-    have else_cons := FH.consL _ _ q s₂.toStmt this2 this_else
-    exact FH.ifThenElse _ _ _ _ _ this_cons else_cons
+    exact FH.ifThenElse _ _ _ _ _
+      (FH.consL _ _ q s₁.toStmt (ih₁ hpre) (foo_true b (pre q s₁) (pre q s₂)))
+      (FH.consL _ _ q s₂.toStmt (ih₂ hq) (foo_false b (pre q s₁) (pre q s₂)))
   case case5 inv b body q ih =>
     simp [pre, vc] at *
     intro hbody_pre hq_exit hvc_body
@@ -186,36 +172,25 @@ theorem vc_pre (s : AStmt) (q : Assertion) :
       apply FH.consL _ (pre inv body) _ _ body_fh
       intro st hinv
       exact hbody_pre st hinv.1 hinv.2
-    · intro st hinv
-      apply hq_exit st hinv.1
-      cases h : beval b st
-      · rfl
-      · exact absurd h hinv.2
+    · intro st hinv; grind
 
 
 
 
 theorem vc_sound (s : AStmt) (q : Assertion) :
-  vc s q → Valid (pre q s) (s.toStmt) q := by
-  intros h
-  have : FH (pre q s) (s.toStmt) q := by apply vc_pre; assumption
-  exact fh_sound (pre q s) (s.toStmt) q this
+  vc s q → Valid (pre q s) (s.toStmt) q :=
+  fun h => fh_sound _ _ _ (vc_pre s q h)
 
-
+@[simp, grind]
 def vc' (p : Assertion) (s : AStmt) (q : Assertion) : Prop :=
   vc s q ∧ p.entails (pre q s)
 
-
+@[grind ←]
 theorem vc'_sound (p : Assertion) (s : AStmt) (q : Assertion) :
   vc' p s q → Valid p (s.toStmt) q := by
-  intros h
-  simp [vc'] at h
-  have : Valid (pre q s) (s.toStmt) q := by apply vc_sound; simp_all
-  simp [Valid] at *
-  intros st st' hp hs
-  have hp' : (pre q s) st := by simp [Assertion.entails] at h; simp_all
-  apply this st st'; assumption
-  assumption
+  simp [vc', Valid, Assertion.entails]
+  intro hvc hent st st' hp hbs
+  exact vc_sound s q hvc st st' (hent st hp) hbs
 
 
 

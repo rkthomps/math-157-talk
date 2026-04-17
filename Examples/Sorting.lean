@@ -56,36 +56,25 @@ def is_permutation (xs ys : List Nat) : Bool :=
 #eval is_permutation [1, 2, 3] [3, 2]
 
 
+@[grind →]
 theorem is_sorted_tail (y : Nat) (ys : List Nat) :
     is_sorted (y :: ys) = true → is_sorted ys = true := by
-  intro h
-  cases ys with
-  | nil => simp [is_sorted]
-  | cons z zs =>
-    by_cases hyz : y ≤ z
-    · simp [is_sorted, hyz] at h; exact h
-    · simp [is_sorted, hyz] at h
+  intro h; cases ys <;> grind [is_sorted]
 
+@[grind →]
 theorem sorted_cons_le (y z : Nat) (zs : List Nat) :
     is_sorted (y :: z :: zs) = true → y ≤ z := by
-  intro h
-  by_cases hyz : y ≤ z
-  · exact hyz
-  · simp [is_sorted, hyz] at h
+  grind [is_sorted]
 
+@[grind →]
 theorem sorted_lb (y : Nat) (ys : List Nat) :
     is_sorted (y :: ys) = true → ∀ z ∈ ys, y ≤ z := by
   induction ys generalizing y with
   | nil => simp
   | cons w ws ih =>
-    intro h z hz
-    rw [List.mem_cons] at hz
-    rcases hz with rfl | hmem
-    · exact sorted_cons_le y z ws h
-    · have hyw := sorted_cons_le y w ws h
-      have htail := is_sorted_tail y (w :: ws) h
-      exact Nat.le_trans hyw (ih w htail z hmem)
+    intro h z hz; grind
 
+@[grind =]
 theorem mem_insert (w x : Nat) (xs : List Nat) :
     w ∈ insert x xs ↔ w = x ∨ w ∈ xs := by
   induction xs with
@@ -94,35 +83,16 @@ theorem mem_insert (w x : Nat) (xs : List Nat) :
     unfold insert
     by_cases hxa : x ≤ a
     · simp [if_pos hxa, List.mem_cons]
-    · simp only [if_neg hxa, List.mem_cons, ih]
-      constructor
-      · rintro (rfl | rfl | h)
-        · exact Or.inr (Or.inl rfl)
-        · exact Or.inl rfl
-        · exact Or.inr (Or.inr h)
-      · rintro (rfl | rfl | h)
-        · exact Or.inr (Or.inl rfl)
-        · exact Or.inl rfl
-        · exact Or.inr (Or.inr h)
+    · simp only [if_neg hxa, List.mem_cons, ih]; grind
 
 theorem insert_lb (n x : Nat) (xs : List Nat) :
     n ≤ x → (∀ z ∈ xs, n ≤ z) → ∀ w ∈ insert x xs, n ≤ w := by
-  intro hnx hbound w hw
-  rw [mem_insert] at hw
-  rcases hw with rfl | hmem
-  · exact hnx
-  · exact hbound w hmem
+  grind
 
+@[grind ←]
 theorem is_sorted_cons_of_lb (y : Nat) (ys : List Nat) :
     (∀ z ∈ ys, y ≤ z) → is_sorted ys = true → is_sorted (y :: ys) = true := by
-  intro hbound hsorted
-  cases ys with
-  | nil => simp [is_sorted]
-  | cons w ws =>
-    have hyw : y ≤ w := hbound w (List.mem_cons.mpr (Or.inl rfl))
-    simp only [is_sorted]
-    rw [if_pos hyw]
-    exact hsorted
+  intro hbound hsorted; cases ys <;> grind [is_sorted]
 
 theorem insert_preserves_sortedness (x : Nat) (xs : List Nat) :
   is_sorted xs = true → is_sorted (insert x xs) = true := by
@@ -130,20 +100,10 @@ theorem insert_preserves_sortedness (x : Nat) (xs : List Nat) :
   induction xs with
   | nil => simp [insert, is_sorted]
   | cons y ys ih =>
-    simp [insert]
-    split
-    · -- Case 1: x ≤ y
-      simp_all [is_sorted]
-    · -- Case 2: x > y
-      rename_i hgt
-      have hys : is_sorted ys = true := is_sorted_tail y ys h
-      have hins : is_sorted (insert x ys) = true := ih hys
-      have hyx : y ≤ x := by omega
-      have hlb : ∀ z ∈ ys, y ≤ z := sorted_lb y ys h
-      have hins_lb : ∀ w ∈ insert x ys, y ≤ w := insert_lb y x ys hyx hlb
-      exact is_sorted_cons_of_lb y (insert x ys) hins_lb hins
+    simp [insert]; grind [is_sorted]
 
 
+@[grind =]
 theorem count_insert (n x : Nat) (xs : List Nat) :
     count n (insert x xs) = count n (x :: xs) := by
   induction xs with
@@ -152,23 +112,17 @@ theorem count_insert (n x : Nat) (xs : List Nat) :
     unfold insert
     by_cases hxa : x ≤ a
     · simp [if_pos hxa]
-    · simp only [if_neg hxa, count, ih]
-      by_cases hxn : x = n <;> by_cases han : a = n <;> simp_all <;> omega
+    · simp only [if_neg hxa, count, ih]; grind
 
+@[grind =]
 theorem count_insertion_sort (n : Nat) (xs : List Nat) :
     count n (insertion_sort xs) = count n xs := by
-  induction xs with
-  | nil => simp [insertion_sort, count]
-  | cons x xs ih =>
-    simp only [insertion_sort, count_insert, count, ih]
+  induction xs <;> simp_all [insertion_sort, count_insert, count]
 
 theorem items_equally_represented_of_count (items xs ys : List Nat)
     (h : ∀ n, count n xs = count n ys) :
     items_equally_represented items xs ys = true := by
-  induction items with
-  | nil => simp [items_equally_represented]
-  | cons item items' ih =>
-    simp only [items_equally_represented, h item, ite_true, ih]
+  induction items <;> simp_all [items_equally_represented]
 
 theorem insertion_sort_correct (xs : List Nat) :
   is_sorted (insertion_sort xs) = true ∧
@@ -222,6 +176,7 @@ def BinaryTree.insert (n : Nat) : BinaryTree → BinaryTree
     else .node value count left (BinaryTree.insert n right)
 
 
+@[grind =]
 theorem BinaryTree.mem_insert (n x : Nat) (t : BinaryTree) :
     mem (BinaryTree.insert n t) x = true ↔ x = n ∨ mem t x = true := by
   induction t with
@@ -230,31 +185,14 @@ theorem BinaryTree.mem_insert (n x : Nat) (t : BinaryTree) :
   | node v c l r ihl ihr =>
     simp only [BinaryTree.insert]
     by_cases h_eq : n = v
-    · simp only [if_pos h_eq, mem]
-      constructor
-      · intro h; right; exact h
-      · rintro (rfl | h)
-        · subst h_eq; simp [mem]
-        · exact h
+    · simp only [if_pos h_eq, mem]; grind
     · by_cases h_lt : n < v
       · simp only [if_neg h_eq, if_pos h_lt, mem]
-        by_cases hxv : x = v
-        · simp [hxv]
-        · simp only [if_neg hxv, Bool.or_eq_true, ihl]
-          exact or_assoc
+        by_cases hxv : x = v <;> simp_all [Bool.or_eq_true]
+        exact or_assoc
       · simp only [if_neg h_eq, if_neg h_lt, mem]
-        by_cases hxv : x = v
-        · simp [hxv]
-        · simp only [if_neg hxv, Bool.or_eq_true, ihr]
-          constructor
-          · rintro (h | rfl | h)
-            · right; left; exact h
-            · left; rfl
-            · right; right; exact h
-          · rintro (rfl | h | h)
-            · right; left; rfl  -- x = n → in right half... wait
-            · left; exact h
-            · right; right; exact h
+        by_cases hxv : x = v <;> simp_all [Bool.or_eq_true]
+        grind
 
 
 inductive IsBST : BinaryTree → Prop where
@@ -288,15 +226,13 @@ theorem bst_insert_preserves_bst (n : Nat) (t : BinaryTree) (h : IsBST t) :
       · simp only [if_neg h_eq, if_pos h_lt]
         apply IsBST.node _ _ _ _ ihl hr _ hrb
         intro x hx
-        have hx' : x = n ∨ x ∈ left := (BinaryTree.mem_insert n x left).mp hx
-        rcases hx' with rfl | hx'
+        rcases (BinaryTree.mem_insert n x left).mp hx with rfl | hx'
         · exact h_lt
         · exact hlb x hx'
       · simp only [if_neg h_eq, if_neg h_lt]
         apply IsBST.node _ _ _ _ ‹_› ihr hlb
         intro x hx
-        have hx' : x = n ∨ x ∈ right := (BinaryTree.mem_insert n x right).mp hx
-        rcases hx' with rfl | hx'
+        rcases (BinaryTree.mem_insert n x right).mp hx with rfl | hx'
         · omega
         · exact hrb x hx'
 
@@ -355,10 +291,10 @@ theorem BinaryTree.to_list_mem (t : BinaryTree) (x : Nat) :
     simp only [BinaryTree.to_list, List.mem_append, List.mem_replicate] at hmem
     rcases hmem with (hmem | ⟨-, rfl⟩) | hmem
     · have hxl : mem l x = true := ihl hmem
-      simp only [mem]; by_cases hxv : x = v <;> simp_all [Bool.or_eq_true]
+      simp only [mem]; by_cases hxv : x = v <;> simp_all
     · simp [mem]
     · have hxr : mem r x = true := ihr hmem
-      simp only [mem]; by_cases hxv : x = v <;> simp_all [Bool.or_eq_true]
+      simp only [mem]; by_cases hxv : x = v <;> simp_all
 
 -- BST.to_sorted_list is sorted for any BST
 theorem to_sorted_list_sorted (t : BinaryTree) (h : IsBST t) :
@@ -390,18 +326,14 @@ theorem count_append (n : Nat) (xs ys : List Nat) :
   induction xs with
   | nil => simp [count]
   | cons x xs ih =>
-    simp only [List.cons_append, count, ih]
-    by_cases h : x = n <;> simp [h] <;> omega
+    simp only [List.cons_append, count, ih]; grind
 
 theorem count_replicate (n x k : Nat) :
     count n (List.replicate k x) = if x = n then k else 0 := by
   induction k with
   | zero => simp [count]
   | succ k ih =>
-    rw [List.replicate_succ, count, ih]
-    by_cases h : x = n
-    · simp [h]; omega
-    · simp [h]
+    rw [List.replicate_succ, count, ih]; grind
 
 -- ---- tree_count relates BinaryTree.to_list counts to tree structure ----
 
@@ -415,8 +347,7 @@ theorem count_to_list (t : BinaryTree) (n : Nat) :
   induction t with
   | empty => simp [BinaryTree.to_list, count, tree_count]
   | node v c l r ihl ihr =>
-    simp only [BinaryTree.to_list, tree_count, count_append, count_replicate, ihl, ihr]
-    by_cases h : v = n <;> simp [h] <;> omega
+    simp only [BinaryTree.to_list, tree_count, count_append, count_replicate, ihl, ihr]; grind
 
 theorem tree_count_insert (n x : Nat) (t : BinaryTree) :
     tree_count n (BinaryTree.insert x t) = (if x = n then 1 else 0) + tree_count n t := by
@@ -426,10 +357,7 @@ theorem tree_count_insert (n x : Nat) (t : BinaryTree) :
   | node v c l r ihl ihr =>
     unfold BinaryTree.insert tree_count
     by_cases h_eq : x = v
-    · simp [h_eq]
-      by_cases h : v = n
-      · simp [h]; omega
-      · simp [h]
+    · simp [h_eq]; grind
     · by_cases h_lt : x < v
       · simp [h_eq, h_lt, ihl]; omega
       · simp [h_eq, h_lt, ihr]; omega
@@ -444,11 +372,7 @@ theorem tree_count_foldl (n : Nat) (xs : List Nat) (init : BST) :
     rw [ih (BST.insert x init)]
     show count n xs + tree_count n (BinaryTree.insert x init.tree) =
          count n (x :: xs) + tree_count n init.tree
-    rw [tree_count_insert]
-    simp only [count]
-    by_cases h : x = n
-    · simp [h]; omega
-    · simp [h]
+    simp only [count, tree_count_insert]; grind
 
 -- ============================================================
 -- Main theorem: bst_sort is correct
