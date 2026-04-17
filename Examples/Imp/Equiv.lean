@@ -142,33 +142,44 @@ theorem count_up_to_end_state : Valid (fun _ => True) count_up_inv.toStmt count_
 
 
 
-theorem count_up_meets_spec (initial : State):
-  Valid (fun st => st = initial) count_up_inv.toStmt (fun st => st.equivOn ["sum"] (count_spec initial)) := by
+def inv_down: Assertion := fun st =>
+  let n := st "n"
+  let i := st "i"
+  let sum := st "sum"
+  let case1 := n < 0 ∧ i = n ∧ sum == 0
+  let case2 := 0 ≤ n ∧ -1 ≤ i ∧ i ≤ n ∧ sum == (n * (n + 1)) / 2 - (i * (i + 1)) / 2
+  case1 ∨ case2
+
+def count_down_inv := [aimp|
+  sum := 0;
+  i := n;
+  while (0 <= i) inv(inv_down) {
+    sum := sum + i;
+    i := i - 1
+  }
+]
+
+theorem count_down_to_end_state : Valid (fun _ => True) count_down_inv.toStmt count_end_state := by
   apply vc'_sound
-  simp [vc', Assertion.entails, count_up_inv, Assertion.subst, aeval, State.update, count_spec, State.equivOn, inv_up]
+  simp [vc', Assertion.entails, count_down_inv, Assertion.subst, aeval, State.update, count_end_state]
+  simp [inv_down, beval, aeval, State.update]
   constructor
   · constructor
     · intros st h1 h2
-      sorry
-    · intros s h1
-      simp [beval, aeval]
-      intros h2
+      grind
+    · intros s h1 h2
       cases h1
       · simp_all
-      · simp_all
-
-      have : s "i" = s "n" + 1 := by
-        have foo : s "i" <= s "n" + 1 := by simp_all
-        omega
-
-
+      · have : s "n" >= 0 := by omega
+        split
+        · omega
+        · have : s "i" = -1 := by omega
+          simp_all
   · omega
 
 
-
-
-
-
+theorem count_up_down_equiv : EquivOn ["sum"] count_up_inv.toStmt count_down_inv.toStmt := by
+  sorry
 
 
 
