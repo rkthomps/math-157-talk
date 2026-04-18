@@ -15,6 +15,7 @@ def insertion_sort : List Nat → List Nat
 | [] => []
 | (x :: xs) => insert x (insertion_sort xs)
 
+#eval insertion_sort [3, 1, 4, 1, 5, 9]
 
 -- A Specification for Being Sorted
 def is_sorted : List Nat → Bool
@@ -167,6 +168,21 @@ def BinaryTree.to_list : BinaryTree → List Nat
   | .node value count left right =>
     BinaryTree.to_list left ++ List.replicate count value ++ BinaryTree.to_list right
 
+inductive IsBST : BinaryTree → Prop where
+ | emp : IsBST BinaryTree.empty
+ | node (value count : Nat) (left right : BinaryTree) :
+   IsBST left →
+   IsBST right →
+   (∀ x, x ∈ left → x < value) →
+   (∀ x, x ∈ right → x > value) →
+   IsBST (BinaryTree.node value count left right)
+
+
+structure BST where
+  tree : BinaryTree
+  is_bst : IsBST tree
+
+
 
 def BinaryTree.insert (n : Nat) : BinaryTree → BinaryTree
   | .empty => .node n 1 .empty .empty
@@ -174,7 +190,6 @@ def BinaryTree.insert (n : Nat) : BinaryTree → BinaryTree
     if n = value then .node value (count + 1) left right
     else if n < value then .node value count (BinaryTree.insert n left) right
     else .node value count left (BinaryTree.insert n right)
-
 
 @[grind =]
 theorem BinaryTree.mem_insert (n x : Nat) (t : BinaryTree) :
@@ -193,21 +208,6 @@ theorem BinaryTree.mem_insert (n x : Nat) (t : BinaryTree) :
       · simp only [if_neg h_eq, if_neg h_lt, mem]
         by_cases hxv : x = v <;> simp_all [Bool.or_eq_true]
         grind
-
-
-inductive IsBST : BinaryTree → Prop where
- | emp : IsBST BinaryTree.empty
- | node (value count : Nat) (left right : BinaryTree) :
-   IsBST left →
-   IsBST right →
-   (∀ x, x ∈ left → x < value) →
-   (∀ x, x ∈ right → x > value) →
-   IsBST (BinaryTree.node value count left right)
-
-
-structure BST where
-  tree : BinaryTree
-  is_bst : IsBST tree
 
 
 theorem bst_insert_preserves_bst (n : Nat) (t : BinaryTree) (h : IsBST t) :
@@ -236,7 +236,6 @@ theorem bst_insert_preserves_bst (n : Nat) (t : BinaryTree) (h : IsBST t) :
         · omega
         · exact hrb x hx'
 
-
 def BST.insert (n : Nat) (bst : BST) : BST :=
   { tree := BinaryTree.insert n bst.tree,
     is_bst := bst_insert_preserves_bst n bst.tree bst.is_bst }
@@ -248,6 +247,12 @@ def BST.to_sorted_list (bst : BST) : List Nat := BinaryTree.to_list bst.tree
 def bst_sort (xs : List Nat) : List Nat :=
   let bst := xs.foldl (fun acc x => BST.insert x acc) { tree := BinaryTree.empty, is_bst := IsBST.emp }
   BST.to_sorted_list bst
+
+
+
+
+
+
 
 
 
