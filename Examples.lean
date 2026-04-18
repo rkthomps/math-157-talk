@@ -2,3 +2,4 @@
 -- Import modules here that should be built as part of the library.
 import Examples.Sorting
 import Examples.Imp.AStmtSyntax
+import Examples.EquivNoGrind
