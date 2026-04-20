@@ -1,10 +1,11 @@
 /-
 Equivalence of `count_up` and `count_down` proved directly from the
-big-step semantics — no Floyd–Hoare logic, no VC generation, no `grind`.
+big-step semantics — no Floyd–Hoare logic, no VC generation.
 
 The point of this file is to show that a direct big-step proof is
-possible but painful. Compare with `Examples.Imp.Equiv`, where the
-same theorem falls out of `vc'_sound` + a `grind` call.
+possible without Floyd–Hoare logic. `grind` is still used to shorten
+proofs. Compare with `Examples.Imp.Equiv`, where the same theorem
+falls out of `vc'_sound` + a `grind` call.
 -/
 
 import Examples.Imp.AST
@@ -13,7 +14,9 @@ import Examples.Imp.Eval
 import Examples.Imp.Semantics
 
 namespace Imp
-namespace CountNoGrind
+namespace CountNoFH
+
+attribute [local grind unfold] State.update beval aeval
 
 -- ============================================================
 -- The two programs
@@ -42,12 +45,15 @@ def count_down := [imp|
 -- ============================================================
 
 /-- The triangle-number step law: `T(i) + i = T(i+1)` where `T(i) = i*(i-1)/2`. -/
-theorem tri_step (i : Int) : i * (i - 1) / 2 + i = i * (i + 1) / 2 := by
-  have h : i * (i + 1) = i * (i - 1) + i * 2 := by
-    have e1 : i * (i + 1) = i * i + i := by rw [Int.mul_add, Int.mul_one]
-    have e2 : i * (i - 1) = i * i - i := by rw [Int.mul_sub, Int.mul_one]
-    omega
-  rw [h, Int.add_mul_ediv_right _ _ (by decide : (2:Int) ≠ 0)]
+@[grind =]
+theorem tri_step (i : Int) : i * (i - 1) / 2 + i = i * (i + 1) / 2 := by grind
+
+/-- `tri_step` restated so the RHS matches the shape `(i+1) * ((i+1) - 1) / 2`
+    produced when the invariant `sum = i * (i - 1) / 2` is specialised at the
+    post-increment value `i + 1`. -/
+@[grind =]
+theorem tri_step_post (i : Int) :
+    i * (i - 1) / 2 + i = (i + 1) * ((i + 1) - 1) / 2 := by grind
 
 -- ============================================================
 -- A reusable induction principle on `while` derivations
@@ -68,20 +74,7 @@ theorem while_ind (b : BExp) (body : Stmt) (P : State → State → Prop)
         P st₁ st₃)
     {st st' : State} (h : BigStep st (.while b body) st') : P st st' := by
   generalize hs : Stmt.while b body = s at h
-  induction h with
-  | «skip» => cases hs
-  | assign => cases hs
-  | seq => cases hs
-  | ifTrue => cases hs
-  | ifFalse => cases hs
-  | whileFalse b' body' st'' hne =>
-      injection hs with hb hbd
-      subst hb; subst hbd
-      exact hfalse st'' hne
-  | whileTrue b' body' s₁ s₂ s₃ hb hbody hwhile _ih₁ ih₂ =>
-      injection hs with hbeq hbdeq
-      subst hbeq; subst hbdeq
-      exact htrue s₁ s₂ s₃ hb hbody hwhile (ih₂ rfl)
+  induction h <;> grind
 
 -- ============================================================
 -- Loop lemma for count_up (0 ≤ n case)
@@ -107,44 +100,17 @@ theorem count_up_loop_pos (n : Int) (_hn : 0 ≤ n) :
       s' "n" = n ∧ s' "sum" = n * (n + 1) / 2)
     ?hF ?hT h
   · -- false branch: guard fails, so st "i" > n, combined with ≤ n+1 gives = n+1
-    intro s hne hn_eq hi_lo hi_hi hsum
-    simp only [beval, aeval, decide_eq_true_eq] at hne
-    rw [hn_eq] at hne
-    have hi_eq : s "i" = n + 1 := by omega
-    refine ⟨hn_eq, ?_⟩
-    rw [hsum, hi_eq]
-    -- Goal: (n+1) * (n+1 - 1) / 2 = n * (n+1) / 2
-    have h1 : (n + 1) * (n + 1 - 1) = n * (n + 1) := by
-      have hs : (n + 1 - 1 : Int) = n := by omega
-      rw [hs, Int.mul_comm]
-    rw [h1]
+    grind [Int.mul_comm]
   · -- true branch: body runs; peel off the two assignments
     intro s₁ s₂ s₃ hb hbody _hwhile ih hn_eq hi_lo hi_hi hsum
-    simp only [beval, aeval, decide_eq_true_eq] at hb
-    rw [hn_eq] at hb
     cases hbody with
     | seq _ _ _ sM _ hb1 hb2 =>
-      -- Derive all facts about s₂ in a single sub-proof so that `cases` inside
-      -- does not substitute `s₂` away from the outer context.
       have facts : s₂ "n" = s₁ "n"
                  ∧ s₂ "i" = s₁ "i" + 1
                  ∧ s₂ "sum" = s₁ "sum" + s₁ "i" := by
-        cases hb1 with
-        | assign =>
-          cases hb2 with
-          | assign =>
-            refine ⟨?_, ?_, ?_⟩ <;> simp [State.update, aeval]
+        cases hb1 with | assign => cases hb2 with | assign => grind
       obtain ⟨h2_n, h2_i, h2_sum⟩ := facts
-      apply ih
-      · rw [h2_n, hn_eq]
-      · rw [h2_i]; omega
-      · rw [h2_i]; omega
-      · rw [h2_sum, h2_i, hsum]
-        -- Goal: s₁ "i" * (s₁ "i" - 1) / 2 + s₁ "i"
-        --      = (s₁ "i" + 1) * (s₁ "i" + 1 - 1) / 2
-        have hs : (s₁ "i" + 1 - 1 : Int) = s₁ "i" := by omega
-        rw [hs, Int.mul_comm (s₁ "i" + 1) (s₁ "i")]
-        exact tri_step (s₁ "i")
+      apply ih <;> first | grind | (rw [h2_sum, h2_i, hsum]; grind)
 
 -- ============================================================
 -- Loop lemma for count_down (0 ≤ n case)
@@ -169,39 +135,16 @@ theorem count_down_loop_pos (n : Int) (_hn : 0 ≤ n) :
       s' "n" = n ∧ s' "sum" = n * (n + 1) / 2)
     ?hF ?hT h
   · -- false branch: guard fails, so s "i" < 0, combined with ≥ -1 gives = -1
-    intro s hne hn_eq hi_lo hi_hi hsum
-    simp only [beval, aeval, decide_eq_true_eq] at hne
-    have hi_eq : s "i" = -1 := by omega
-    refine ⟨hn_eq, ?_⟩
-    rw [hsum, hi_eq]
-    -- Goal: n*(n+1)/2 - (-1) * (-1 + 1) / 2 = n*(n+1)/2
-    have h1 : ((-1 : Int)) * ((-1 : Int) + 1) = 0 := by decide
-    rw [h1]; simp
+    grind
   · intro s₁ s₂ s₃ hb hbody _hwhile ih hn_eq hi_lo hi_hi hsum
-    simp only [beval, aeval, decide_eq_true_eq] at hb
     cases hbody with
     | seq _ _ _ sM _ hb1 hb2 =>
       have facts : s₂ "n" = s₁ "n"
                  ∧ s₂ "i" = s₁ "i" - 1
                  ∧ s₂ "sum" = s₁ "sum" + s₁ "i" := by
-        cases hb1 with
-        | assign =>
-          cases hb2 with
-          | assign =>
-            refine ⟨?_, ?_, ?_⟩ <;> simp [State.update, aeval]
+        cases hb1 with | assign => cases hb2 with | assign => grind
       obtain ⟨h2_n, h2_i, h2_sum⟩ := facts
-      apply ih
-      · rw [h2_n, hn_eq]
-      · rw [h2_i]; omega
-      · rw [h2_i]; omega
-      · rw [h2_sum, h2_i, hsum]
-        -- Goal:  n*(n+1)/2 - s₁"i"*(s₁"i"+1)/2 + s₁"i"
-        --      = n*(n+1)/2 - (s₁"i" - 1) * ((s₁"i" - 1) + 1) / 2
-        have hs : (s₁ "i" - 1 + 1 : Int) = s₁ "i" := by omega
-        rw [hs, Int.mul_comm (s₁ "i" - 1) (s₁ "i")]
-        have hstep := tri_step (s₁ "i")
-        -- hstep: s₁"i" * (s₁"i" - 1) / 2 + s₁"i" = s₁"i" * (s₁"i" + 1) / 2
-        omega
+      apply ih <;> first | grind | (rw [h2_sum, h2_i, hsum]; grind)
 
 -- ============================================================
 -- Loop lemma for count_up (n < 0 case)
@@ -217,15 +160,7 @@ theorem count_up_loop_neg (n : Int) (hn : n < 0) :
     st "n" = n → st "i" = 0 → st "sum" = 0 →
     st' "n" = n ∧ st' "sum" = 0 := by
   intro st st' h hn_eq hi hsum
-  cases h with
-  | whileFalse _ _ _ hne =>
-    exact ⟨hn_eq, hsum⟩
-  | whileTrue _ _ _ _ _ hb _ _ =>
-    -- guard is `st "i" ≤ st "n"` = `0 ≤ n`, contradicting n < 0
-    exfalso
-    simp only [beval, aeval, decide_eq_true_eq] at hb
-    rw [hi, hn_eq] at hb
-    omega
+  cases h <;> grind
 
 -- ============================================================
 -- Loop lemma for count_down (n < 0 case)
@@ -241,15 +176,7 @@ theorem count_down_loop_neg (n : Int) (hn : n < 0) :
     st "n" = n → st "i" = n → st "sum" = 0 →
     st' "n" = n ∧ st' "sum" = 0 := by
   intro st st' h hn_eq hi hsum
-  cases h with
-  | whileFalse _ _ _ _ =>
-    exact ⟨hn_eq, hsum⟩
-  | whileTrue _ _ _ _ _ hb _ _ =>
-    -- guard is `0 ≤ st "i"` = `0 ≤ n`, contradicting n < 0
-    exfalso
-    simp only [beval, aeval, decide_eq_true_eq] at hb
-    rw [hi] at hb
-    omega
+  cases h <;> grind
 
 -- ============================================================
 -- Full program semantics for count_up
@@ -260,24 +187,13 @@ theorem count_up_end_sum (st st' : State) (h : BigStep st count_up st') :
   simp only [count_up] at h
   cases h with
   | seq _ _ _ s1 _ hInit hLoop =>
-    -- Extract facts about s1 without letting the sub-cases collapse s1 away.
     have hs1 : s1 "n" = st "n" ∧ s1 "i" = 0 ∧ s1 "sum" = 0 := by
       cases hInit with
       | seq _ _ _ s0 _ hA hB =>
-        cases hA with | assign =>
-        cases hB with | assign =>
-        refine ⟨?_, ?_, ?_⟩ <;> simp [State.update, aeval]
-    obtain ⟨hs1_n, hs1_i, hs1_sum⟩ := hs1
+        cases hA with | assign => cases hB with | assign => grind
     by_cases hn : 0 ≤ st "n"
-    · have hres := count_up_loop_pos (st "n") hn s1 st' hLoop
-          hs1_n (by rw [hs1_i]; omega) (by rw [hs1_i]; omega)
-          (by rw [hs1_sum, hs1_i]; decide)
-      rw [if_neg (by omega : ¬ st "n" < 0)]
-      exact hres.2
-    · have hn' : st "n" < 0 := by omega
-      have hres := count_up_loop_neg (st "n") hn' s1 st' hLoop hs1_n hs1_i hs1_sum
-      rw [if_pos hn']
-      exact hres.2
+    · grind [count_up_loop_pos]
+    · grind [count_up_loop_neg]
 
 -- ============================================================
 -- Full program semantics for count_down
@@ -291,20 +207,10 @@ theorem count_down_end_sum (st st' : State) (h : BigStep st count_down st') :
     have hs1 : s1 "n" = st "n" ∧ s1 "i" = st "n" ∧ s1 "sum" = 0 := by
       cases hInit with
       | seq _ _ _ s0 _ hA hB =>
-        cases hA with | assign =>
-        cases hB with | assign =>
-        refine ⟨?_, ?_, ?_⟩ <;> simp [State.update, aeval]
-    obtain ⟨hs1_n, hs1_i, hs1_sum⟩ := hs1
+        cases hA with | assign => cases hB with | assign => grind
     by_cases hn : 0 ≤ st "n"
-    · have hres := count_down_loop_pos (st "n") hn s1 st' hLoop
-          hs1_n (by rw [hs1_i]; omega) (by rw [hs1_i]; omega)
-          (by rw [hs1_sum, hs1_i]; omega)
-      rw [if_neg (by omega : ¬ st "n" < 0)]
-      exact hres.2
-    · have hn' : st "n" < 0 := by omega
-      have hres := count_down_loop_neg (st "n") hn' s1 st' hLoop hs1_n hs1_i hs1_sum
-      rw [if_pos hn']
-      exact hres.2
+    · grind [count_down_loop_pos]
+    · grind [count_down_loop_neg]
 
 -- ============================================================
 -- Equivalence
@@ -317,7 +223,7 @@ theorem count_up_down_equiv_sum
     (h₁ : BigStep st count_up st₁)
     (h₂ : BigStep st count_down st₂) :
     st₁ "sum" = st₂ "sum" := by
-  rw [count_up_end_sum st st₁ h₁, count_down_end_sum st st₂ h₂]
+  grind [count_up_end_sum, count_down_end_sum]
 
-end CountNoGrind
+end CountNoFH
 end Imp
