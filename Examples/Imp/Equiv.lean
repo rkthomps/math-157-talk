@@ -96,8 +96,8 @@ def inv_up (k : Int) : Assertion := fun st =>
   let n := st "n"
   let i := st "i"
   let sum := st "sum"
-  let case1 := 0 = i ∧ n < 0 ∧ sum == 0
-  let case2 := 0 ≤ i ∧ i ≤ n + 1 ∧ 0 ≤ n ∧ sum == (i * (i - 1)) / 2
+  let case1 := 0 ≤ i ∧ n < 0 ∧ sum == 0
+  let case2 := 0 ≤ i ∧ i ≤ n + 1 ∧ sum == (i * (i - 1)) / 2
   n = k ∧ (case1 ∨ case2)
 
 
